@@ -80,7 +80,12 @@ The accuracy for that model is **`r percentOK`%**.
 ##Inside the black box
 Even if it is not the project purpose, by curiosity, I tried to see inside the random forest black box with plotmo package: for each feature, it draws the probabilty of being assigned to a class. The other variables are fixed to their median value. The plots are in the appendice.
 
-It gives a small insight but it remains quite difficult to extract some explanations on how the outcome is correlated with the features.
+By example: 
+
+  * for class B, feature *magnet_dumbbell_y*,
+  * for class E, feature *roll_belt*,
+
+give a clear signal with a probability of 80% but actually, it remains quite difficult to extract some explanations on how the outcome is correlated with the features.
 
 ##Appendice
 
