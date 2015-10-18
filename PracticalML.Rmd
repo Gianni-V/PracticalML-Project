@@ -4,58 +4,93 @@ author: "Gianni-V"
 date: "18 octobre 2015"
 output: html_document
 ---
-#Practical Machine Learning Project
-```{r, echo=FALSE, results='hide'}
+##Synopsis
+The purpose of this project is to find a model predicting as precisely as possible the activity quality from activity monitors. The data comes from http://groupware.les.inf.puc-rio.br/har. A random forest model was defined with nine influential variables. The model obtains above 98% of correct classifications on the cross-validation set.
+
+##Exploratory data analysis
+The data are made of 1 outcome, 159 features and 19622 rows. A simple summary view (in appendix) shows that 2/3 of the features are empty or contain almost NA values. Then I focus on the 58 features with data for each row.
+```{r, echo=FALSE}
+options(scipen=999, digits = 2)
+```
+```{r, message=FALSE}
 library("dplyr")
 library("caret")
+library("randomForest")
 library("doParallel")
 library("plotmo")
 set.seed(5345)
 ```
-##Synopsis
-The purpose of this project is to find a model predicting as precisely as possible the activity quality from activity monitors. The data comes from http://groupware.les.inf.puc-rio.br/har. A random forest model was defined with nine essential variables. The model obtains 98% of correct classifications on the cross-validation set.
-
-##Exploratory data analysis
-The data are made of 160 features and 19622 rows. A simple summary view shows that 2/3 of the features are empty or NA values. Then I focus on the 58 features with data for each row.
+  
+The following vector contains the feature names that I will use:
 ```{r}
 colsSel <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","new_window","num_window","roll_belt","pitch_belt","yaw_belt","total_accel_belt","gyros_belt_x","gyros_belt_y","gyros_belt_z","accel_belt_x","accel_belt_y","accel_belt_z","magnet_belt_x","magnet_belt_y","magnet_belt_z","roll_arm","pitch_arm","yaw_arm","total_accel_arm","gyros_arm_x","gyros_arm_y","gyros_arm_z","accel_arm_x","accel_arm_y","accel_arm_z","magnet_arm_x","magnet_arm_y","magnet_arm_z","roll_dumbbell","pitch_dumbbell","yaw_dumbbell","total_accel_dumbbell","gyros_dumbbell_x","gyros_dumbbell_y","gyros_dumbbell_z","accel_dumbbell_x","accel_dumbbell_y","accel_dumbbell_z","magnet_dumbbell_x","magnet_dumbbell_y","magnet_dumbbell_z","roll_forearm","pitch_forearm","yaw_forearm","total_accel_forearm","gyros_forearm_x","gyros_forearm_y","gyros_forearm_z","accel_forearm_x","accel_forearm_y","accel_forearm_z","magnet_forearm_x","magnet_forearm_y","magnet_forearm_z", "classe")
 ```
-Before anything else, the training set is split into a true training set of 2000 rows and a cross-validation set  with the 17622 remaining rows.
+  
+
+Before anything else, the training set is split into a sampled training set of 2000 rows and a cross-validation set  with the 17622 remaining rows.
 ```{r}
-training <- read.csv("pml-training.csv")
-training <- select_(training, .dots = colsSel)
+origTraining <- read.csv("pml-training.csv")
+training <- select_(origTraining, .dots = colsSel)
 
 samp <- sample(nrow(training), 2000)
 trainSet <- training[samp,]
 cvSet <- training[-samp,]
 ```
-First of all, I try to fit a random forest on all the features. My intention is to find the most important varables and restrict the final model to those ones. By the way, I use a parallel implementation of random forest.
+  
+
+First of all, I try to fit a random forest on all the features. My intention is to find the most important varables and restrict the final model to those ones. By the way, I use a parallel implementation of random forest that run quicker on multicores computers.
 ```{r, cache=TRUE}
 registerDoParallel()
 fitRF <- train(classe ~ ., data = trainSet, method = "parRF", prox=T)
+```
+  
 
+The important variables can be obtained with **importance** function. It gives the mean decrease in Gini index on a per variable basis.
+```{r}
 imp <- importance(fitRF$finalModel)
 imp <- data.frame(colnames = rownames(imp), imp) %>% arrange(desc(MeanDecreaseGini))
+plot(imp$MeanDecreaseGini, ylab = "Mean Gini index decrease")
+text(imp[1:6,]$MeanDecreaseGini, labels = imp[1:6,]$colnames, pos = 4)
 ```
+
 The 9 most influential features are:
 ```{r}
-imp[1:9,]$colnames
+for(c in imp[1:9,]$colnames) print(c)
 ```
 
 ##Final model
-The final model is constructed with those features.
+The final model is fitted with those 9 features.
 ```{r, cache=TRUE}
 reducFormula <- as.formula(paste("classe", " ~ ", "`", paste(imp[1:9,]$colnames, collapse="` + `"), "`", sep=""))
 fitRF <- train(reducFormula, data = trainSet, method = "parRF", prox=T)
 ```
+  
 Finally, it is cross-validated with the cross-validation set:
-```{r}
+```{r, message=FALSE}
 pred <- predict(fitRF, cvSet)
-tab <- table(pred, cvSet$classe)
-sum(diag(tab))/sum(tab)
 ```
-We can try to see inside the random forest black box with plotmo package: 
+  
+Tha accuracy is computed with a contingency table:
 ```{r}
+tab <- table(pred, cvSet$classe)
+percentOK <- sum(diag(tab))/sum(tab) * 100
+```
+The accuracy for that model is **`r percentOK`%**.
+  
+##Inside the black box
+Even if it is not the project purpose, by curiosity, I tried to see inside the random forest black box with plotmo package: for each feature, it draws the probabilty of being assigned to a class. The other variables are fixed to their median value. The plots are in the appendice.
+
+It gives a small insight but it remains quite difficult to extract some explanations on how the outcome is correlated with the features.
+
+##Appendice
+
+###Summary of original training data:
+```{r}
+summary(origTraining)
+```
+
+###Plot for each class with plotmo package:
+```{r, results='hide'}
 for(i in seq(1, length(levels(training$classe)))){
     plotmo(fitRF, type = "prob", nresponse = i)
 }
