@@ -1,0 +1,12 @@
+base
+dplyr
+lattice
+ggplot2
+caret
+foreach
+iterators
+doParallel
+plotrix
+TeachingDemos
+plotmo
+randomForest
