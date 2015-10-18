@@ -1,0 +1,15 @@
+---
+title: "Practical Machine Learning Project"
+author: "Gianni-V"
+date: "18 octobre 2015"
+output: html_document
+---
+#Practical Machine Learning Project
+```{r, echo=FALSE}
+library("dplyr")
+library("caret")
+library("doParallel")
+library("plotmo")
+```
+##Synopsis
+The purpose of this project is to find a model predicting as precisely as possible the activity class 
