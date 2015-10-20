@@ -5,10 +5,10 @@ date: "18 octobre 2015"
 output: html_document
 ---
 ##Synopsis
-The purpose of this project is to find a model predicting as precisely as possible the activity quality from activity monitors. The data comes from http://groupware.les.inf.puc-rio.br/har. A random forest model was defined with nine influential variables. The model obtains above 98% of correct classifications on the cross-validation set.
+The purpose of this project is to find a model predicting as precisely as possible the activity quality from activity monitors. The data comes from http://groupware.les.inf.puc-rio.br/har. A random forest model was defined with six influential variables. The model obtains above 98% of correct classifications on the cross-validation set.
 
 ##Exploratory data analysis
-The data are made of 1 outcome, 159 features and 19622 rows. A simple summary view (in appendix) shows that 2/3 of the features are empty or contain almost NA values. Then I focus on the 58 features with data for each row.
+The data are made of 1 outcome, 159 features and 19622 rows. A simple summary view (in appendix) shows that 2/3 of the features are empty or contain almost NA values thus I focus on the 58 features with data for each row.
 ```{r, echo=FALSE}
 options(scipen=999, digits = 2)
 ```
@@ -17,7 +17,7 @@ library("dplyr")
 library("caret")
 library("randomForest")
 library("doParallel")
-library("plotmo")
+library("gridExtra")
 set.seed(5345)
 ```
   
@@ -38,14 +38,16 @@ cvSet <- training[-samp,]
 ```
   
 
-First of all, I try to fit a random forest on all the features. My intention is to find the most important varables and restrict the final model to those ones. By the way, I use a parallel implementation of random forest that run quicker on multicores computers.
+First of all, I try to fit a random forest on all the features. The partitioning process of tree classification seems right to manage that data set of which the features seem intermingled and the random forest will avoid overfitting.
+
+After that step, my intention is to find the most important varables and restrict the final model to those ones. By the way, I use a parallel implementation of random forest that run quicker on multicores computers.
 ```{r, cache=TRUE}
 registerDoParallel()
 fitRF <- train(classe ~ ., data = trainSet, method = "parRF", prox=T)
 ```
   
 
-The important variables can be obtained with **importance** function. It gives the mean decrease in Gini index on a per variable basis.
+The important variables can be obtained with the **importance** function. It gives the mean decrease in Gini index on a per variable basis, ie an increase in homogeneity/purity.
 ```{r}
 imp <- importance(fitRF$finalModel)
 imp <- data.frame(colnames = rownames(imp), imp) %>% arrange(desc(MeanDecreaseGini))
@@ -53,15 +55,15 @@ plot(imp$MeanDecreaseGini, ylab = "Mean Gini index decrease")
 text(imp[1:6,]$MeanDecreaseGini, labels = imp[1:6,]$colnames, pos = 4)
 ```
 
-The 9 most influential features are:
+The 6 most influential features are:
 ```{r}
-for(c in imp[1:9,]$colnames) print(c)
+for(c in imp[1:6,]$colnames) print(c)
 ```
 
 ##Final model
-The final model is fitted with those 9 features.
+The final model is fitted with those 6 features.
 ```{r, cache=TRUE}
-reducFormula <- as.formula(paste("classe", " ~ ", "`", paste(imp[1:9,]$colnames, collapse="` + `"), "`", sep=""))
+reducFormula <- as.formula(paste("classe", " ~ ", "`", paste(imp[1:6,]$colnames, collapse="` + `"), "`", sep=""))
 fitRF <- train(reducFormula, data = trainSet, method = "parRF", prox=T)
 ```
   
@@ -78,25 +80,23 @@ percentOK <- sum(diag(tab))/sum(tab) * 100
 The accuracy for that model is **`r percentOK`%**.
   
 ##Inside the black box
-Even if it is not the project purpose, by curiosity, I tried to see inside the random forest black box with plotmo package: for each feature, it draws the probabilty of being assigned to a class. The other variables are fixed to their median value. The plots are in the appendice.
+The job is done, but by curiosity, now that we have come to only 6 features, we can plot them and see a bit more clearly the structure in the data set.
+```{r, fig.width=9, fig.height=8}
+gPts <- geom_point(position = "jitter", alpha = .25)
 
-By example: 
+feat1_3 <- ggplot(data = training, aes_string(x = as.character(imp$colnames[1]), y = as.character(imp$colnames[3]), col = "classe")) + gPts
+feat2_3 <- ggplot(data = training, aes_string(x = as.character(imp$colnames[2]), y = as.character(imp$colnames[3]), col = "classe")) + gPts
+feat5_4 <- ggplot(data = training, aes_string(x = as.character(imp$colnames[5]), y = as.character(imp$colnames[4]), col = "classe")) + gPts
+feat6_4 <- ggplot(data = training, aes_string(x = as.character(imp$colnames[6]), y = as.character(imp$colnames[4]), col = "classe")) + gPts
 
-  * for class B, feature *magnet_dumbbell_y*,
-  * for class E, feature *roll_belt*,
+grid.arrange(feat1_3, feat2_3, feat5_4, feat6_4, nrow = 2, ncol = 2)
+```
 
-give a clear signal with a probability of 80% but actually, it remains quite difficult to extract some explanations on how the outcome is correlated with the features.
+Obviously, those 6 features succeed quite nicely in displaying patches of homogeneous classes.
 
-##Appendice
+##Appendix
 
 ###Summary of original training data:
 ```{r}
 summary(origTraining)
-```
-
-###Plot for each class with plotmo package:
-```{r, results='hide'}
-for(i in seq(1, length(levels(training$classe)))){
-    plotmo(fitRF, type = "prob", nresponse = i)
-}
 ```
